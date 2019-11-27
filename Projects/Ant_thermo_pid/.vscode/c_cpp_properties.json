@@ -1,0 +1,66 @@
+{
+    "configurations": [
+        {
+            "name": "!!! WARNING !!! AUTO-GENERATED FILE, PLEASE DO NOT MODIFY IT AND USE https://docs.platformio.org/page/projectconf/section_env_build.html#build-flags"
+        },
+        {
+            "name": "Mac",
+            "macFrameworkPath": [],
+            "includePath": [
+                "/Users/user/Documents/PlatformIO/Projects/Ant_thermo_pid/include",
+                "/Users/user/Documents/PlatformIO/Projects/Ant_thermo_pid/src",
+                "/Users/user/.platformio/lib/LCD-NOKIA5110-SSVS",
+                "/Users/user/.platformio/lib/LCD5110_Graph",
+                "/Users/user/.platformio/lib/MAX31850 DallasTemp_ID663",
+                "/Users/user/.platformio/lib/MAX31850 OneWire_ID748",
+                "/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino",
+                "/Users/user/.platformio/packages/framework-arduino-avr/variants/eightanaloginputs",
+                "/Users/user/.platformio/lib/DallasTemperature_ID54",
+                "/Users/user/.platformio/lib/OneWire_ID1",
+                "/Users/user/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                "/Users/user/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                "/Users/user/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                "/Users/user/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
+                "/Users/user/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                "/Users/user/.platformio/packages/tool-unity",
+                ""
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": [
+                    "/Users/user/Documents/PlatformIO/Projects/Ant_thermo_pid/include",
+                    "/Users/user/Documents/PlatformIO/Projects/Ant_thermo_pid/src",
+                    "/Users/user/.platformio/lib/LCD-NOKIA5110-SSVS",
+                    "/Users/user/.platformio/lib/LCD5110_Graph",
+                    "/Users/user/.platformio/lib/MAX31850 DallasTemp_ID663",
+                    "/Users/user/.platformio/lib/MAX31850 OneWire_ID748",
+                    "/Users/user/.platformio/packages/framework-arduino-avr/cores/arduino",
+                    "/Users/user/.platformio/packages/framework-arduino-avr/variants/eightanaloginputs",
+                    "/Users/user/.platformio/lib/DallasTemperature_ID54",
+                    "/Users/user/.platformio/lib/OneWire_ID1",
+                    "/Users/user/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                    "/Users/user/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                    "/Users/user/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                    "/Users/user/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
+                    "/Users/user/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                    "/Users/user/.platformio/packages/tool-unity",
+                    ""
+                ]
+            },
+            "defines": [
+                "PLATFORMIO=40100",
+                "ARDUINO_AVR_PRO",
+                "F_CPU=8000000L",
+                "ARDUINO_ARCH_AVR",
+                "ARDUINO=10808",
+                "__AVR_ATmega328P__",
+                ""
+            ],
+            "intelliSenseMode": "clang-x64",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "compilerPath": "\"/Users/user/.platformio/packages/toolchain-atmelavr/bin/avr-gcc\" -mmcu=atmega328p"
+        }
+    ],
+    "version": 4
+}
