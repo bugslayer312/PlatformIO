@@ -14,6 +14,7 @@ extern uint8_t SmallFont[];
 extern uint8_t MediumNumbers[];
 extern uint8_t BigNumbers[];
 extern uint8_t TinyFont[];
+extern uint8_t heatBmp[];
 
 OneWire tempEnvWire(PIN_TEMP_ENV);
 DallasTemperature tempEnvSensor(&tempEnvWire);
@@ -27,7 +28,7 @@ bool tempHeaterSensorIsValid = false;
 
 size_t uptimeSec = (size_t)-1;
 
-void PrintUptime() {
+/*void PrintUptime() {
   char buf[9];
   byte tm[3];
   size_t seconds = uptimeSec % 86400l;
@@ -54,6 +55,25 @@ void PrintUptime() {
   myGLCD.print(buf, CENTER, 0);
   myGLCD.setFont(TinyFont);
   myGLCD.print(buf, CENTER, 42);
+} */
+
+void DrawPower(uint16_t value) {
+  uint8_t v = map(value, 0, 1023, 0, 40);
+  if (v <= 5) {
+    myGLCD.drawRect(0, 48 - v, 2, 48);
+  }
+}
+
+void AnimateHeat(uint8_t x0) {
+  for (uint16_t x=x0; x <= x0+9; ++x) {
+    for (int y=0; y <= 10; ++y) {
+      myGLCD.clrPixel(x, y);
+    }
+  }
+  static byte y0 = 2;
+  myGLCD.drawBitmap(x0 + (y0 % 2), y0, heatBmp, 8, 8);
+  if (y0) --y0;
+  else y0 = 2;
 }
 
 void PrintEnvTemp(float value) {
@@ -61,7 +81,7 @@ void PrintEnvTemp(float value) {
   if (value != prevTemp) {
     prevTemp = value;
     myGLCD.setFont(MediumNumbers);
-    myGLCD.printNumF(value, 2, LEFT, 8, '.', 5, '0');
+    myGLCD.printNumF(value, 2, CENTER, 10, '.', 5, '0');
   }
 }
 
@@ -70,7 +90,7 @@ void PrintHeaterTemp(float value) {
   if (value != prevTemp) {
     prevTemp = value;
     myGLCD.setFont(MediumNumbers);
-    myGLCD.printNumF(value, 2, LEFT, 26, '.', 5, '0');
+    myGLCD.printNumF(value, 2, CENTER, 28, '.', 5, '0');
   }
 }
 
@@ -101,9 +121,9 @@ void loop() {
     return;
   }
   uptimeSec = uptime;
-  PrintUptime();
+  AnimateHeat(75);
 
-  if (!(uptimeSec % 5)) {
+  if (!(uptimeSec % 10)) {
     if (tempEnvSensorIsValid) {
       float tempEnv = 0;
       if (tempEnvSensor.requestTemperaturesByAddress(tempEnvAddress)) {
@@ -113,7 +133,7 @@ void loop() {
     }
   }
 
-  if (!((uptimeSec+2) % 5)) {
+  if (!((uptimeSec+5) % 10)) {
     if (tempHeaterSensorIsValid) {
       float tempHeater = 0;
       if (tempHeaterSensor.requestTemperaturesByAddress(tempHeaterAddress)) {
