@@ -27,6 +27,7 @@ DeviceAddress tempHeaterAddress;
 bool tempHeaterSensorIsValid = false;
 
 size_t uptimeSec = (size_t)-1;
+bool needUpdate = false;
 
 /*void PrintUptime() {
   char buf[9];
@@ -57,11 +58,39 @@ size_t uptimeSec = (size_t)-1;
   myGLCD.print(buf, CENTER, 42);
 } */
 
-void DrawPower(uint16_t value) {
-  uint8_t v = map(value, 0, 1023, 0, 40);
-  if (v <= 5) {
-    myGLCD.drawRect(0, 48 - v, 2, 48);
+void DrawPowerWidget(uint16_t value) {
+  static uint16_t prevValue = (uint16_t)-5;
+  if (abs(value - prevValue) <= 2) return;
+  if (prevValue < 1024 && prevValue > value) {
+    myGLCD.clrRectArea(0, 7, 5, 47 - map(prevValue, 0, 1023, 0, 40));
   }
+  prevValue = value;
+  byte v = map(value, 0, 1023, 0, 40);
+  byte stepVal = min(v, 5);
+  myGLCD.fillRect(0, 47 - stepVal, 2, 47);
+  if (v > 6) {
+    stepVal = min(v, 12);
+    myGLCD.fillRect(0, 47 - stepVal, 3, 40);
+    if (v > 13) {
+      stepVal = min(v, 19);
+      myGLCD.fillRect(0, 47 - stepVal, 3, 33);
+      if (v > 20) {
+        stepVal = min(v, 26);
+        myGLCD.fillRect(0, 47 - stepVal, 4, 26);
+        if (v > 27) {
+          stepVal = min(v, 33);
+          myGLCD.fillRect(0, 47 - stepVal, 4, 19);
+          if (v > 34) {
+            myGLCD.fillRect(0, 47 - v, 5, 12);
+          }
+        }
+      }
+    }
+  }
+  myGLCD.setFont(TinyFont);
+  myGLCD.print("   ", 0, 0);
+  myGLCD.printNumI(map(value, 0, 1023, 0, 100), 0, 0);
+  needUpdate = true;
 }
 
 void AnimateHeat(uint8_t x0) {
@@ -74,6 +103,7 @@ void AnimateHeat(uint8_t x0) {
   myGLCD.drawBitmap(x0 + (y0 % 2), y0, heatBmp, 8, 8);
   if (y0) --y0;
   else y0 = 2;
+  needUpdate = true;
 }
 
 void PrintEnvTemp(float value) {
@@ -82,6 +112,7 @@ void PrintEnvTemp(float value) {
     prevTemp = value;
     myGLCD.setFont(MediumNumbers);
     myGLCD.printNumF(value, 2, CENTER, 10, '.', 5, '0');
+    needUpdate = true;
   }
 }
 
@@ -91,6 +122,7 @@ void PrintHeaterTemp(float value) {
     prevTemp = value;
     myGLCD.setFont(MediumNumbers);
     myGLCD.printNumF(value, 2, CENTER, 28, '.', 5, '0');
+    needUpdate = true;
   }
 }
 
@@ -116,31 +148,35 @@ void setup() {
 }
 
 void loop() {
+  DrawPowerWidget(analogRead(0));
+
   size_t uptime = millis() / 1000;
-  if (uptimeSec == uptime) {
-    return;
-  }
-  uptimeSec = uptime;
-  AnimateHeat(75);
+  if (uptimeSec != uptime) {
+    uptimeSec = uptime;
+    AnimateHeat(75);
 
-  if (!(uptimeSec % 10)) {
-    if (tempEnvSensorIsValid) {
-      float tempEnv = 0;
-      if (tempEnvSensor.requestTemperaturesByAddress(tempEnvAddress)) {
-        tempEnv = tempEnvSensor.getTempC(tempEnvAddress);
+    if (!(uptimeSec % 10)) {
+      if (tempEnvSensorIsValid) {
+        float tempEnv = 0;
+        if (tempEnvSensor.requestTemperaturesByAddress(tempEnvAddress)) {
+          tempEnv = tempEnvSensor.getTempC(tempEnvAddress);
+        }
+        PrintEnvTemp(tempEnv);
       }
-      PrintEnvTemp(tempEnv);
+    }
+
+    if (!((uptimeSec+5) % 10)) {
+      if (tempHeaterSensorIsValid) {
+        float tempHeater = 0;
+        if (tempHeaterSensor.requestTemperaturesByAddress(tempHeaterAddress)) {
+          tempHeater = tempHeaterSensor.getTempC(tempHeaterAddress);
+        }
+        PrintHeaterTemp(tempHeater);
+      }
     }
   }
-
-  if (!((uptimeSec+5) % 10)) {
-    if (tempHeaterSensorIsValid) {
-      float tempHeater = 0;
-      if (tempHeaterSensor.requestTemperaturesByAddress(tempHeaterAddress)) {
-        tempHeater = tempHeaterSensor.getTempC(tempHeaterAddress);
-      }
-      PrintHeaterTemp(tempHeater);
-    }
+  if (needUpdate) {
+    myGLCD.update();
+    needUpdate = false;
   }
-  myGLCD.update();
 }
