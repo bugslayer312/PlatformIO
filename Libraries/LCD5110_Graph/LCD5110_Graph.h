@@ -76,8 +76,27 @@ struct _current_font
 	uint8_t inverted;
 };
 
+void SetBits(uint8_t*, uint8_t);
+void ClearBits(uint8_t*, uint8_t);
+void FlipBits(uint8_t*, uint8_t);
+
 class LCD5110
 {
+	protected:
+		typedef void (*EditByteFunc) (uint8_t*, uint8_t);
+
+		void _LCD_Write(unsigned char data, unsigned char mode);
+		void _print_char(unsigned char c, int x, int row);
+		void _convert_float(char *buf, double num, int width, byte prec);
+		void _editPixel(int x, int y, EditByteFunc f);
+		void _drawHLine(int x, int y, int l, EditByteFunc f);
+		void _drawVLine(int x, int y, int l, EditByteFunc f);
+		void _drawLine(int x1, int y1, int x2, int y2, EditByteFunc f);
+		void _drawRect(int x1, int y1, int x2, int y2, EditByteFunc f);
+		void _fillRect(int x1, int y1, int x2, int y2, EditByteFunc f);
+		void _drawRoundRect(int x1, int y1, int x2, int y2, EditByteFunc f);
+		void _drawCircle(int x, int y, int radius, EditByteFunc f);
+
 	public:
 		LCD5110(int SCK, int MOSI, int DC, int RST, int CS);
 		void InitLCD(int contrast=LCD_CONTRAST);
@@ -88,9 +107,6 @@ class LCD5110
 		void clrScr();
 		void fillScr();
 		void invert(bool mode);
-		void setPixel(uint16_t x, uint16_t y);
-		void clrPixel(uint16_t x, uint16_t y);
-		void invPixel(uint16_t x, uint16_t y);
 		void invertText(bool mode);
 		void print(char *st, int x, int y);
 		void print(String st, int x, int y);
@@ -98,14 +114,45 @@ class LCD5110
 		void printNumF(double num, byte dec, int x, int y, char divider='.', int length=0, char filler=' ');
 		void setFont(uint8_t* font);
 		void drawBitmap(int x, int y, uint8_t* bitmap, int sx, int sy);
-		void drawLine(int x1, int y1, int x2, int y2);
-		void clrLine(int x1, int y1, int x2, int y2);
-		void drawRect(int x1, int y1, int x2, int y2);
-		void clrRect(int x1, int y1, int x2, int y2);
-		void drawRoundRect(int x1, int y1, int x2, int y2);
-		void clrRoundRect(int x1, int y1, int x2, int y2);
-		void drawCircle(int x, int y, int radius);
-		void clrCircle(int x, int y, int radius);
+		inline void setPixel(uint16_t x, uint16_t y) __attribute__((always_inline)) {
+			_editPixel(x, y, &SetBits);
+		}
+		inline void clrPixel(uint16_t x, uint16_t y) __attribute__((always_inline)) {
+			_editPixel(x, y, &ClearBits);
+		}
+		inline void invPixel(uint16_t x, uint16_t y) __attribute__((always_inline)) {
+			_editPixel(x, y, &FlipBits);
+		}
+		inline void drawLine(int x1, int y1, int x2, int y2) __attribute__((always_inline)) {
+			_drawLine(x1, y1, x2, y2, &SetBits);
+		}
+		inline void clrLine(int x1, int y1, int x2, int y2) __attribute__((always_inline)) {
+			_drawLine(x1, y1, x2, y2, &ClearBits);
+		}
+		inline void drawRect(int x1, int y1, int x2, int y2) __attribute__((always_inline)) {
+			_drawRect(x1, y1, x2, y2, &SetBits);
+		}
+		inline void fillRect(int x1, int y1, int x2, int y2) __attribute__((always_inline)) {
+			_fillRect(x1, y1, x2, y2, &SetBits);
+		}
+		inline void clrRect(int x1, int y1, int x2, int y2) __attribute__((always_inline)) {
+			_drawRect(x1, y1, x2, y2, &ClearBits);
+		}
+		inline void clrRectArea(int x1, int y1, int x2, int y2) __attribute__((always_inline)) {
+			_fillRect(x1, y1, x2, y2, &ClearBits);
+		}
+		inline void drawRoundRect(int x1, int y1, int x2, int y2) __attribute__((always_inline)) {
+			_drawRoundRect(x1, y1, x2, y2, &SetBits);
+		}
+		inline void clrRoundRect(int x1, int y1, int x2, int y2) __attribute__((always_inline)) {
+			_drawRoundRect(x1, y1, x2, y2, &ClearBits);
+		}
+		inline void drawCircle(int x, int y, int radius) __attribute__((always_inline)) {
+			_drawCircle(x, y, radius, &SetBits);
+		}
+		inline void clrCircle(int x, int y, int radius) __attribute__((always_inline)) {
+			_drawCircle(x, y, radius, &ClearBits);
+		}
 
 	protected:
 		regtype			*P_SCK, *P_MOSI, *P_DC, *P_RST, *P_CS;
@@ -115,14 +162,6 @@ class LCD5110
 		uint8_t			scrbuf[504];
 		boolean			_sleep;
 		int				_contrast;
-
-		void _LCD_Write(unsigned char data, unsigned char mode);
-		void _print_char(unsigned char c, int x, int row);
-		void _convert_float(char *buf, double num, int width, byte prec);
-		void drawHLine(int x, int y, int l);
-		void clrHLine(int x, int y, int l);
-		void drawVLine(int x, int y, int l);
-		void clrVLine(int x, int y, int l);
 };
 
 #endif

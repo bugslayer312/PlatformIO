@@ -33,6 +33,18 @@
 	#include "hardware/arm/HW_ARM.h"
 #endif
 
+void SetBits(uint8_t* dest, uint8_t src) {
+	*dest |= src;
+}
+
+void ClearBits(uint8_t* dest, uint8_t src) {
+	*dest &= ~src;
+}
+
+void FlipBits(uint8_t* dest, uint8_t src) {
+	*dest ^= src;
+}
+
 LCD5110::LCD5110(int SCK, int MOSI, int DC, int RST, int CS)
 { 
 	P_SCK	= portOutputRegister(digitalPinToPort(SCK));
@@ -63,7 +75,7 @@ void LCD5110::_LCD_Write(unsigned char data, unsigned char mode)
 	else
 		sbi(P_DC, B_DC);
 
-	for (unsigned char c=0; c<8; c++)
+	for (unsigned char c=0; c<8; ++c)
 	{
 		if (data & 0x80)
 			sbi(P_MOSI, B_MOSI);
@@ -118,7 +130,7 @@ void LCD5110::enableSleep()
 	_sleep = true;
 	_LCD_Write(PCD8544_SETYADDR, LCD_COMMAND);
 	_LCD_Write(PCD8544_SETXADDR, LCD_COMMAND);
-	for (int b=0; b<504; b++)
+	for (int b=0; b<504; ++b)
 		_LCD_Write(0, LCD_DATA);
 	_LCD_Write(PCD8544_FUNCTIONSET | PCD8544_POWERDOWN, LCD_COMMAND);
 }
@@ -141,20 +153,20 @@ void LCD5110::update()
 	{
 		_LCD_Write(PCD8544_SETYADDR, LCD_COMMAND);
 		_LCD_Write(PCD8544_SETXADDR, LCD_COMMAND);
-		for (int b=0; b<504; b++)
+		for (int b=0; b<504; ++b)
 			_LCD_Write(scrbuf[b], LCD_DATA);
 	}
 }
 
 void LCD5110::clrScr()
 {
-	for (int c=0; c<504; c++)
+	for (int c=0; c<504; ++c)
 		scrbuf[c]=0;
 }
 
 void LCD5110::fillScr()
 {
-	for (int c=0; c<504; c++)
+	for (int c=0; c<504; ++c)
 		scrbuf[c]=255;
 }
 
@@ -166,7 +178,7 @@ void LCD5110::invert(bool mode)
 		_LCD_Write(PCD8544_DISPLAYCONTROL | PCD8544_DISPLAYNORMAL, LCD_COMMAND);
 }
 
-void LCD5110::setPixel(uint16_t x, uint16_t y)
+void LCD5110::_editPixel(int x, int y, EditByteFunc f)
 {
 	int by, bi;
 
@@ -174,51 +186,217 @@ void LCD5110::setPixel(uint16_t x, uint16_t y)
 	{
 		by=((y/8)*84)+x;
 		bi=y % 8;
-
-		scrbuf[by]=scrbuf[by] | (1<<bi);
+		f(&scrbuf[by], 1<<bi);
 	}
 }
 
-void LCD5110::clrPixel(uint16_t x, uint16_t y)
+void LCD5110::_drawHLine(int x, int y, int l, EditByteFunc f)
 {
 	int by, bi;
 
 	if ((x>=0) and (x<84) and (y>=0) and (y<48))
 	{
-		by=((y/8)*84)+x;
-		bi=y % 8;
-
-		scrbuf[by]=scrbuf[by] & ~(1<<bi);
+		for (int cx=0; cx<l; ++cx)
+		{
+			by=((y/8)*84)+x;
+			bi=y % 8;
+			f(&scrbuf[by+cx], 1<<bi);
+		}
 	}
 }
 
-void LCD5110::invPixel(uint16_t x, uint16_t y)
+void LCD5110::_drawVLine(int x, int y, int l, EditByteFunc f)
 {
-	int by, bi;
-
 	if ((x>=0) and (x<84) and (y>=0) and (y<48))
 	{
-		by=((y/8)*84)+x;
-		bi=y % 8;
+		for (int cy=0; cy<l; ++cy)
+		{
+			_editPixel(x, y+cy, f);
+		}
+	}
+}
 
-		if ((scrbuf[by] & (1<<bi))==0)
-			scrbuf[by]=scrbuf[by] | (1<<bi);
-		else
-			scrbuf[by]=scrbuf[by] & ~(1<<bi);
+void LCD5110::_drawLine(int x1, int y1, int x2, int y2, EditByteFunc f)
+{
+	int tmp;
+	float delta, tx, ty;
+
+	if (y1==y2)
+	{
+		if (x1>x2)
+		{
+			tmp=x1;
+			x1=x2;
+			x2=tmp;
+		}
+		_drawHLine(x1, y1, x2-x1, f);
+	}
+	else if (x1==x2)
+	{
+		if (y1>y2)
+		{
+			tmp=y1;
+			y1=y2;
+			y2=tmp;
+		}
+		_drawVLine(x1, y1, y2-y1, f);
+	}
+	else if (abs(x2-x1)>abs(y2-y1))
+	{
+		if (x2 < x1)
+		{
+			tmp=x1;
+			x1=x2;
+			x2=tmp;
+			tmp=y1;
+			y1=y2;
+			y2=tmp;
+		}
+		delta = float(y2-y1)/float(x2-x1);
+		ty=float(y1);
+		for (int i=x1; i<=x2; ++i)
+		{
+			_editPixel(i, int(ty+0.5f), f);
+			ty=ty+delta;
+		}
+	}
+	else
+	{
+		if (y2 < y1)
+		{
+			tmp=x1;
+			x1=x2;
+			x2=tmp;
+			tmp=y1;
+			y1=y2;
+			y2=tmp;
+		}
+		delta = float(x2-x1)/float(y2-y1);
+		tx=float(x1);
+		for (int i=y1; i<=y2; ++i)
+		{
+			_editPixel(int(tx+0.5f), i, f);
+			tx=tx+delta;
+		}
+	}
+}
+
+void LCD5110::_drawRect(int x1, int y1, int x2, int y2, EditByteFunc f)
+{
+	int tmp;
+
+	if (x1>x2)
+	{
+		tmp=x1;
+		x1=x2;
+		x2=tmp;
+	}
+	if (y1>y2)
+	{
+		tmp=y1;
+		y1=y2;
+		y2=tmp;
+	}
+
+	_drawHLine(x1, y1, x2-x1, f);
+	_drawHLine(x1, y2, x2-x1, f);
+	_drawVLine(x1, y1, y2-y1, f);
+	_drawVLine(x2, y1, y2-y1+1, f);
+}
+
+void LCD5110::_fillRect(int x1, int y1, int x2, int y2, EditByteFunc f)
+{
+	int tmp;
+
+	if (x1>x2)
+	{
+		tmp=x1;
+		x1=x2;
+		x2=tmp;
+	}
+	if (y1>y2)
+	{
+		tmp=y1;
+		y1=y2;
+		y2=tmp;
+	}
+	tmp = x2 - x1;
+	for (int y=y1; y <= y2; ++y) {
+		_drawHLine(x1, y, tmp, f);
+	}
+}
+
+void LCD5110::_drawRoundRect(int x1, int y1, int x2, int y2, EditByteFunc f)
+{
+	int tmp;
+
+	if (x1>x2)
+	{
+		tmp=x1;
+		x1=x2;
+		x2=tmp;
+	}
+	if (y1>y2)
+	{
+		tmp=y1;
+		y1=y2;
+		y2=tmp;
+	}
+	if ((x2-x1)>4 && (y2-y1)>4)
+	{
+		_editPixel(x1+1, y1+1, f);
+		_editPixel(x2-1, y1+1, f);
+		_editPixel(x1+1, y2-1, f);
+		_editPixel(x2-1, y2-1, f);
+		_drawHLine(x1+2, y1, x2-x1-3, f);
+		_drawHLine(x1+2, y2, x2-x1-3, f);
+		_drawVLine(x1, y1+2, y2-y1-3, f);
+		_drawVLine(x2, y1+2, y2-y1-3, f);
+	}
+}
+
+void LCD5110::_drawCircle(int x, int y, int radius, EditByteFunc f)
+{
+	int ff = 1 - radius;
+	int ddF_x = 1;
+	int ddF_y = -2 * radius;
+	int x1 = 0;
+	int y1 = radius;
+	
+	_editPixel(x, y + radius, f);
+	_editPixel(x, y - radius, f);
+	_editPixel(x + radius, y, f);
+	_editPixel(x - radius, y, f);
+ 
+	while(x1 < y1)
+	{
+		if(ff >= 0) 
+		{
+			--y1;
+			ddF_y += 2;
+			ff += ddF_y;
+		}
+		++x1;
+		ddF_x += 2;
+		ff += ddF_x;    
+		_editPixel(x + x1, y + y1, f);
+		_editPixel(x - x1, y + y1, f);
+		_editPixel(x + x1, y - y1, f);
+		_editPixel(x - x1, y - y1, f);
+		_editPixel(x + y1, y + x1, f);
+		_editPixel(x - y1, y + x1, f);
+		_editPixel(x + y1, y - x1, f);
+		_editPixel(x - y1, y - x1, f);
 	}
 }
 
 void LCD5110::invertText(bool mode)
 {
-	if (mode==true)
-		cfont.inverted=1;
-	else
-		cfont.inverted=0;
+	cfont.inverted = mode ? 1 : 0;
 }
 
 void LCD5110::print(char *st, int x, int y)
 {
-	unsigned char ch;
 	int stl;
 
 	stl = strlen(st);
@@ -227,8 +405,8 @@ void LCD5110::print(char *st, int x, int y)
 	if (x == CENTER)
 		x = (84-(stl*cfont.x_size))/2;
 
-	for (int cnt=0; cnt<stl; cnt++)
-			_print_char(*st++, x + (cnt*(cfont.x_size)), y);
+	for (int cnt=0; cnt<stl; ++cnt)
+		_print_char(*st++, x + (cnt*(cfont.x_size)), y);
 }
 
 void LCD5110::print(String st, int x, int y)
@@ -250,7 +428,7 @@ void LCD5110::printNumI(long num, int x, int y, int length, char filler)
 	{
 		if (length!=0)
 		{
-			for (c=0; c<(length-1); c++)
+			for (c=0; c<(length-1); ++c)
 				st[c]=filler;
 			st[c]=48;
 			st[c+1]=0;
@@ -284,14 +462,14 @@ void LCD5110::printNumI(long num, int x, int y, int length, char filler)
 	  
 		if (length>(c+neg))
 		{
-			for (int i=0; i<(length-c-neg); i++)
+			for (int i=0; i<(length-c-neg); ++i)
 			{
 				st[i+neg]=filler;
-				f++;
+				++f;
 			}
 		}
 
-		for (int i=0; i<c; i++)
+		for (int i=0; i<c; ++i)
 		{
 			st[i+neg+f]=buf[c-i-1];
 		}
@@ -314,7 +492,7 @@ void LCD5110::printNumF(double num, byte dec, int x, int y, char divider, int le
 
 	if (divider != '.')
 	{
-		for (int i=0; i<sizeof(st); i++)
+		for (uint8_t i=0; i<sizeof(st); ++i)
 			if (st[i]=='.')
 				st[i]=divider;
 	}
@@ -324,13 +502,13 @@ void LCD5110::printNumF(double num, byte dec, int x, int y, char divider, int le
 		if (neg)
 		{
 			st[0]='-';
-			for (int i=1; i<sizeof(st); i++)
+			for (uint8_t i=1; i<sizeof(st); ++i)
 				if ((st[i]==' ') || (st[i]=='-'))
 					st[i]=filler;
 		}
 		else
 		{
-			for (int i=0; i<sizeof(st); i++)
+			for (uint8_t i=0; i<sizeof(st); ++i)
 				if (st[i]==' ')
 					st[i]=filler;
 		}
@@ -346,19 +524,13 @@ void LCD5110::_print_char(unsigned char c, int x, int y)
 		int font_idx = ((c - cfont.offset)*(cfont.x_size*(cfont.y_size/8)))+4;
 		for (int rowcnt=0; rowcnt<(cfont.y_size/8); rowcnt++)
 		{
-			for(int cnt=0; cnt<cfont.x_size; cnt++)
+			for(int cnt=0; cnt<cfont.x_size; ++cnt)
 			{
-				for (int b=0; b<8; b++)
+				for (int b=0; b<8; ++b)
 					if ((fontbyte(font_idx+cnt+(rowcnt*cfont.x_size)) & (1<<b))!=0)
-						if (cfont.inverted==0)
-							setPixel(x+cnt, y+(rowcnt*8)+b);
-						else
-							clrPixel(x+cnt, y+(rowcnt*8)+b);
+						_editPixel(x+cnt, y+(rowcnt*8)+b, (cfont.inverted ? &ClearBits : &SetBits));
 					else
-						if (cfont.inverted==0)
-							clrPixel(x+cnt, y+(rowcnt*8)+b);
-						else
-							setPixel(x+cnt, y+(rowcnt*8)+b);
+						_editPixel(x+cnt, y+(rowcnt*8)+b, (cfont.inverted ? &SetBits : &ClearBits));
 			}
 		}
 	}
@@ -367,26 +539,18 @@ void LCD5110::_print_char(unsigned char c, int x, int y)
 		int font_idx = ((c - cfont.offset)*((cfont.x_size*cfont.y_size/8)))+4;
 		int cbyte=fontbyte(font_idx);
 		int cbit=7;
-		for (int cx=0; cx<cfont.x_size; cx++)
+		for (int cx=0; cx<cfont.x_size; ++cx)
 		{
-			for (int cy=0; cy<cfont.y_size; cy++)
+			for (int cy=0; cy<cfont.y_size; ++cy)
 			{
 				if ((cbyte & (1<<cbit)) != 0)
-					if (cfont.inverted==0)
-						setPixel(x+cx, y+cy);
-					else
-						clrPixel(x+cx, y+cy);
+					_editPixel(x+cx, y+cy, (cfont.inverted ? &ClearBits : &SetBits));
 				else
-					if (cfont.inverted==0)
-						clrPixel(x+cx, y+cy);
-					else
-						setPixel(x+cx, y+cy);
-				cbit--;
-				if (cbit<0)
+					_editPixel(x+cx, y+cy, (cfont.inverted ? &SetBits : &ClearBits));
+				if (--cbit<0)
 				{
 					cbit=7;
-					font_idx++;
-					cbyte=fontbyte(font_idx);
+					cbyte=fontbyte(++font_idx);
 				}
 			}
 		}
@@ -403,435 +567,18 @@ void LCD5110::setFont(uint8_t* font)
 	cfont.inverted=0;
 }
 
-void LCD5110::drawHLine(int x, int y, int l)
-{
-	int by, bi;
-
-	if ((x>=0) and (x<84) and (y>=0) and (y<48))
-	{
-		for (int cx=0; cx<l; cx++)
-		{
-			by=((y/8)*84)+x;
-			bi=y % 8;
-
-			scrbuf[by+cx] |= (1<<bi);
-		}
-	}
-}
-
-void LCD5110::clrHLine(int x, int y, int l)
-{
-	int by, bi;
-
-	if ((x>=0) and (x<84) and (y>=0) and (y<48))
-	{
-		for (int cx=0; cx<l; cx++)
-		{
-			by=((y/8)*84)+x;
-			bi=y % 8;
-
-			scrbuf[by+cx] &= ~(1<<bi);
-		}
-	}
-}
-
-void LCD5110::drawVLine(int x, int y, int l)
-{
-	int by, bi;
-
-	if ((x>=0) and (x<84) and (y>=0) and (y<48))
-	{
-		for (int cy=0; cy<l; cy++)
-		{
-			setPixel(x, y+cy);
-		}
-	}
-}
-
-void LCD5110::clrVLine(int x, int y, int l)
-{
-	int by, bi;
-
-	if ((x>=0) and (x<84) and (y>=0) and (y<48))
-	{
-		for (int cy=0; cy<l; cy++)
-		{
-			clrPixel(x, y+cy);
-		}
-	}
-}
-
-void LCD5110::drawLine(int x1, int y1, int x2, int y2)
-{
-	int tmp;
-	double delta, tx, ty;
-	double m, b, dx, dy;
-	
-	if (((x2-x1)<0))
-	{
-		tmp=x1;
-		x1=x2;
-		x2=tmp;
-		tmp=y1;
-		y1=y2;
-		y2=tmp;
-	}
-    if (((y2-y1)<0))
-	{
-		tmp=x1;
-		x1=x2;
-		x2=tmp;
-		tmp=y1;
-		y1=y2;
-		y2=tmp;
-	}
-
-	if (y1==y2)
-	{
-		if (x1>x2)
-		{
-			tmp=x1;
-			x1=x2;
-			x2=tmp;
-		}
-		drawHLine(x1, y1, x2-x1);
-	}
-	else if (x1==x2)
-	{
-		if (y1>y2)
-		{
-			tmp=y1;
-			y1=y2;
-			y2=tmp;
-		}
-		drawVLine(x1, y1, y2-y1);
-	}
-	else if (abs(x2-x1)>abs(y2-y1))
-	{
-		delta=(double(y2-y1)/double(x2-x1));
-		ty=double(y1);
-		if (x1>x2)
-		{
-			for (int i=x1; i>=x2; i--)
-			{
-				setPixel(i, int(ty+0.5));
-        		ty=ty-delta;
-			}
-		}
-		else
-		{
-			for (int i=x1; i<=x2; i++)
-			{
-				setPixel(i, int(ty+0.5));
-        		ty=ty+delta;
-			}
-		}
-	}
-	else
-	{
-		delta=(float(x2-x1)/float(y2-y1));
-		tx=float(x1);
-        if (y1>y2)
-        {
-			for (int i=y2+1; i>y1; i--)
-			{
-		 		setPixel(int(tx+0.5), i);
-        		tx=tx+delta;
-			}
-        }
-        else
-        {
-			for (int i=y1; i<y2+1; i++)
-			{
-		 		setPixel(int(tx+0.5), i);
-        		tx=tx+delta;
-			}
-        }
-	}
-
-}
-
-void LCD5110::clrLine(int x1, int y1, int x2, int y2)
-{
-	int tmp;
-	double delta, tx, ty;
-	double m, b, dx, dy;
-	
-	if (((x2-x1)<0))
-	{
-		tmp=x1;
-		x1=x2;
-		x2=tmp;
-		tmp=y1;
-		y1=y2;
-		y2=tmp;
-	}
-    if (((y2-y1)<0))
-	{
-		tmp=x1;
-		x1=x2;
-		x2=tmp;
-		tmp=y1;
-		y1=y2;
-		y2=tmp;
-	}
-
-	if (y1==y2)
-	{
-		if (x1>x2)
-		{
-			tmp=x1;
-			x1=x2;
-			x2=tmp;
-		}
-		clrHLine(x1, y1, x2-x1);
-	}
-	else if (x1==x2)
-	{
-		if (y1>y2)
-		{
-			tmp=y1;
-			y1=y2;
-			y2=tmp;
-		}
-		clrVLine(x1, y1, y2-y1);
-	}
-	else if (abs(x2-x1)>abs(y2-y1))
-	{
-		delta=(double(y2-y1)/double(x2-x1));
-		ty=double(y1);
-		if (x1>x2)
-		{
-			for (int i=x1; i>=x2; i--)
-			{
-				clrPixel(i, int(ty+0.5));
-        		ty=ty-delta;
-			}
-		}
-		else
-		{
-			for (int i=x1; i<=x2; i++)
-			{
-				clrPixel(i, int(ty+0.5));
-        		ty=ty+delta;
-			}
-		}
-	}
-	else
-	{
-		delta=(float(x2-x1)/float(y2-y1));
-		tx=float(x1);
-        if (y1>y2)
-        {
-			for (int i=y2+1; i>y1; i--)
-			{
-		 		clrPixel(int(tx+0.5), i);
-        		tx=tx+delta;
-			}
-        }
-        else
-        {
-			for (int i=y1; i<y2+1; i++)
-			{
-		 		clrPixel(int(tx+0.5), i);
-        		tx=tx+delta;
-			}
-        }
-	}
-
-}
-
-void LCD5110::drawRect(int x1, int y1, int x2, int y2)
-{
-	int tmp;
-
-	if (x1>x2)
-	{
-		tmp=x1;
-		x1=x2;
-		x2=tmp;
-	}
-	if (y1>y2)
-	{
-		tmp=y1;
-		y1=y2;
-		y2=tmp;
-	}
-
-	drawHLine(x1, y1, x2-x1);
-	drawHLine(x1, y2, x2-x1);
-	drawVLine(x1, y1, y2-y1);
-	drawVLine(x2, y1, y2-y1+1);
-}
-
-void LCD5110::clrRect(int x1, int y1, int x2, int y2)
-{
-	int tmp;
-
-	if (x1>x2)
-	{
-		tmp=x1;
-		x1=x2;
-		x2=tmp;
-	}
-	if (y1>y2)
-	{
-		tmp=y1;
-		y1=y2;
-		y2=tmp;
-	}
-
-	clrHLine(x1, y1, x2-x1);
-	clrHLine(x1, y2, x2-x1);
-	clrVLine(x1, y1, y2-y1);
-	clrVLine(x2, y1, y2-y1+1);
-}
-
-void LCD5110::drawRoundRect(int x1, int y1, int x2, int y2)
-{
-	int tmp;
-
-	if (x1>x2)
-	{
-		tmp=x1;
-		x1=x2;
-		x2=tmp;
-	}
-	if (y1>y2)
-	{
-		tmp=y1;
-		y1=y2;
-		y2=tmp;
-	}
-	if ((x2-x1)>4 && (y2-y1)>4)
-	{
-		setPixel(x1+1,y1+1);
-		setPixel(x2-1,y1+1);
-		setPixel(x1+1,y2-1);
-		setPixel(x2-1,y2-1);
-		drawHLine(x1+2, y1, x2-x1-3);
-		drawHLine(x1+2, y2, x2-x1-3);
-		drawVLine(x1, y1+2, y2-y1-3);
-		drawVLine(x2, y1+2, y2-y1-3);
-	}
-}
-
-void LCD5110::clrRoundRect(int x1, int y1, int x2, int y2)
-{
-	int tmp;
-
-	if (x1>x2)
-	{
-		tmp=x1;
-		x1=x2;
-		x2=tmp;
-	}
-	if (y1>y2)
-	{
-		tmp=y1;
-		y1=y2;
-		y2=tmp;
-	}
-	if ((x2-x1)>4 && (y2-y1)>4)
-	{
-		clrPixel(x1+1,y1+1);
-		clrPixel(x2-1,y1+1);
-		clrPixel(x1+1,y2-1);
-		clrPixel(x2-1,y2-1);
-		clrHLine(x1+2, y1, x2-x1-3);
-		clrHLine(x1+2, y2, x2-x1-3);
-		clrVLine(x1, y1+2, y2-y1-3);
-		clrVLine(x2, y1+2, y2-y1-3);
-	}
-}
-
-void LCD5110::drawCircle(int x, int y, int radius)
-{
-	int f = 1 - radius;
-	int ddF_x = 1;
-	int ddF_y = -2 * radius;
-	int x1 = 0;
-	int y1 = radius;
-	char ch, cl;
-	
-	setPixel(x, y + radius);
-	setPixel(x, y - radius);
-	setPixel(x + radius, y);
-	setPixel(x - radius, y);
- 
-	while(x1 < y1)
-	{
-		if(f >= 0) 
-		{
-			y1--;
-			ddF_y += 2;
-			f += ddF_y;
-		}
-		x1++;
-		ddF_x += 2;
-		f += ddF_x;    
-		setPixel(x + x1, y + y1);
-		setPixel(x - x1, y + y1);
-		setPixel(x + x1, y - y1);
-		setPixel(x - x1, y - y1);
-		setPixel(x + y1, y + x1);
-		setPixel(x - y1, y + x1);
-		setPixel(x + y1, y - x1);
-		setPixel(x - y1, y - x1);
-	}
-}
-
-void LCD5110::clrCircle(int x, int y, int radius)
-{
-	int f = 1 - radius;
-	int ddF_x = 1;
-	int ddF_y = -2 * radius;
-	int x1 = 0;
-	int y1 = radius;
-	char ch, cl;
-	
-	clrPixel(x, y + radius);
-	clrPixel(x, y - radius);
-	clrPixel(x + radius, y);
-	clrPixel(x - radius, y);
- 
-	while(x1 < y1)
-	{
-		if(f >= 0) 
-		{
-			y1--;
-			ddF_y += 2;
-			f += ddF_y;
-		}
-		x1++;
-		ddF_x += 2;
-		f += ddF_x;    
-		clrPixel(x + x1, y + y1);
-		clrPixel(x - x1, y + y1);
-		clrPixel(x + x1, y - y1);
-		clrPixel(x - x1, y - y1);
-		clrPixel(x + y1, y + x1);
-		clrPixel(x - y1, y + x1);
-		clrPixel(x + y1, y - x1);
-		clrPixel(x - y1, y - x1);
-	}
-}
-
 void LCD5110::drawBitmap(int x, int y, uint8_t* bitmap, int sx, int sy)
 {
 	int bit;
 	byte data;
 
-	for (int cy=0; cy<sy; cy++)
+	for (int cy=0; cy<sy; ++cy)
 	{
 		bit= cy % 8;
-		for(int cx=0; cx<sx; cx++)
+		for(int cx=0; cx<sx; ++cx)
 		{
 			data=bitmapbyte(cx+((cy/8)*sx));
-			if ((data & (1<<bit))>0)
-				setPixel(x+cx, y+cy);
-			else
-				clrPixel(x+cx, y+cy);
+			_editPixel(x+cx, y+cy, data & (1<<bit) ? &SetBits : &ClearBits);
 		}
 	}      
 }
