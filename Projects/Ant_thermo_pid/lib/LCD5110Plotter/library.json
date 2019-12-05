@@ -1,0 +1,15 @@
+{
+    "name": "LCD5110Plotter",
+    "authors":
+    {
+        "name": "Eugene Moskalev",
+        "email": "bugslayer312@gmail.com"
+    },
+    "version": "1.0.0",
+    "frameworks": "Arduino",
+    "dependencies":
+    {
+        "name": "LCD5110_Graph",
+        "frameworks": "Arduino"
+    }
+}
